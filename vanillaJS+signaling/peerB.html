@@ -39,26 +39,37 @@
       urls: "stun:stun1.l.google.com:19302" 
     })  
 
-    const remoteConnection = new RTCPeerConnection(iceConfiguration) 
+    let remoteConnection = initializePeerConnection();
 
-    remoteConnection.onicecandidate = (event) => {
-      if (event.candidate === null) {
-        // All ICE candidates have been gathered
-        addLine("All ICE candidates have been gathered.");
-  
-        socket.emit("answer", JSON.stringify(remoteConnection.localDescription));
-      } else {
-          addLine("New ICE candidate");
+    function initializePeerConnection() {
+      const newConnection = new RTCPeerConnection(iceConfiguration);
+
+      newConnection.onicecandidate = (event) => {
+        if (event.candidate === null) {
+          // All ICE candidates have been gathered
+          addLine("All ICE candidates have been gathered.");
+    
+          socket.emit("answer", JSON.stringify(newConnection.localDescription));
+        } else {
+            addLine("New ICE candidate");
+        }
+      };
+
+      newConnection.ondatachannel = (e) => {
+        const receiveChannel = e.channel;
+        receiveChannel.onmessage = (e) =>  addLine(`Received message: ${e.data}`)
+        receiveChannel.onopen = (e) => document.getElementById("connection").textContent = "Established"
+        receiveChannel.onclose = (e) => {
+          document.getElementById("connection").textContent = "Closed"
+          // Close connection and create new one
+          remoteConnection.close();
+          remoteConnection = initializePeerConnection();
+        }
+        newConnection.channel = receiveChannel;
       }
-    };
 
-    remoteConnection.ondatachannel = (e) => {
-      const receiveChannel = e.channel;
-      receiveChannel.onmessage = (e) =>  addLine(`Received message: ${e.data}`)
-      receiveChannel.onopen = (e) => document.getElementById("connection").textContent = "Established"
-      receiveChannel.onclose = (e) => document.getElementById("connection").textContent = "Closed"
-      remoteConnection.channel = receiveChannel;
-    }
+      return newConnection;
+  }
 
     async function setRemoteDescription(offer) {
       remoteConnection.setRemoteDescription(JSON.parse(offer))

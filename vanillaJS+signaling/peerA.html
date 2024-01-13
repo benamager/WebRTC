@@ -40,7 +40,8 @@
       urls: 'stun:stun1.l.google.com:19302' 
     })  
 
-    const localConnection = new RTCPeerConnection(iceConfiguration) 
+    let localConnection = new RTCPeerConnection(iceConfiguration) 
+    
 
     localConnection.onicecandidate = (event) => {
       if (event.candidate === null) {
