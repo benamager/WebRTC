@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Peer B</title>
+  <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+</head>
+<body>
+
+  <h1>Peer B</h1>
+  <div>Signaling server: <span id='status'>Connecting...</span></div>
+  <div>WebRTC connection: <span id='connection'>Waiting...</span></div>
+  <p><b>When connected</b>, send messages below</p>
+  <form id='sendMessageForm'>
+    <input id='messageInput' type='text' placeholder='Type message here'/>
+    <button type='submit'>Send</button>
+  </form>
+  <ul id="messages">
+  </ul>
+
+  <script>
+    function addLine(text) {
+      document.getElementById("messages").insertAdjacentHTML("beforeend", `<li>${text}</li>`)
+    }
+
+    const socket = io('http://localhost:8080');
+
+    const iceConfiguration = { }
+    iceConfiguration.iceServers = [];
+    /* TURN server
+    iceConfiguration.iceServers.push({
+      urls: "turn:server.company.com:19403",
+      username: "username",
+      credentials: "token"
+    }) */
+    // STUN  server
+    iceConfiguration.iceServers.push({
+      urls: "stun:stun1.l.google.com:19302" 
+    })  
+
+    const remoteConnection = new RTCPeerConnection(iceConfiguration) 
+
+    remoteConnection.onicecandidate = (event) => {
+      if (event.candidate === null) {
+        // All ICE candidates have been gathered
+        addLine("All ICE candidates have been gathered.");
+  
+        socket.emit("answer", JSON.stringify(remoteConnection.localDescription));
+      } else {
+          addLine("New ICE candidate");
+      }
+    };
+
+    remoteConnection.ondatachannel = (e) => {
+      const receiveChannel = e.channel;
+      receiveChannel.onmessage = (e) =>  addLine(`Received message: ${e.data}`)
+      receiveChannel.onopen = (e) => document.getElementById("connection").textContent = "Established"
+      receiveChannel.onclose = (e) => document.getElementById("connection").textContent = "Closed"
+      remoteConnection.channel = receiveChannel;
+    }
+
+    async function setRemoteDescription(offer) {
+      remoteConnection.setRemoteDescription(JSON.parse(offer))
+        .then(a => addLine("Set remote SDP"))
+      
+      await remoteConnection.createAnswer().then(a => remoteConnection.setLocalDescription(a)).then(a=>
+      addLine("Created answer"))
+    }
+
+    // Send messages when connected
+    document.getElementById('sendMessageForm').addEventListener('submit', function(e) {
+      e.preventDefault();
+      const message = document.getElementById('messageInput').value;
+
+      if (remoteConnection.channel.readyState === 'open') {
+        remoteConnection.channel.send(message);
+        addLine(`Message sent: ${message}`);
+      } else {
+        console.error('Data channel is not open.');
+      }
+    });
+
+    // SIGNALING
+    var statusElement = document.getElementById('status'); // To display connection status
+
+    socket.on('connect', function() {
+        statusElement.textContent = 'Connected';
+        addLine('Connected to the signaling server');
+    });
+
+    socket.on('disconnect', function() {
+      statusElement.innerText = 'Disconnected';
+    });
+
+    socket.on('reconnect_attempt', function() {
+      statusElement.innerText = 'Reconnecting...';
+      addLine('Attempting to reconnect...');
+    });
+
+    socket.on('offer', function(offer) {
+      setRemoteDescription(offer)
+      addLine('Recieved offer');
+    });
+  </script>
+
+</body>
+</html>
