@@ -44,6 +44,7 @@
     function initializePeerConnection() {
       const newConnection = new RTCPeerConnection(iceConfiguration);
 
+      // Currently this is a non tricle ICE connection
       newConnection.onicecandidate = (event) => {
         if (event.candidate === null) {
           // All ICE candidates have been gathered

@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Peer A</title>
+</head>
+<body>
+
+  <h1>Peer A</h1>
+  <p>Copy SDP from console and signal manually to <b>Peer B</b> via input field.</p>
+  <form id="remoteDescriptionForm" type="submit">
+    <input id="remoteDescriptionInput" type="text" placeholder="Remote SDP"/>
+    <button>Create connection</button>
+  </form>
+
+  <br/>
+
+  <p><b>When connected</b>, send messages below</p>
+  <form id="sendMessageForm">
+    <input id="messageInput" type="text" placeholder="Type message here"/>
+    <button type="submit">Send</button>
+  </form>
+  
+
+  <script>
+    const iceConfiguration = { }
+    iceConfiguration.iceServers = [];
+    /* TURN server
+    iceConfiguration.iceServers.push({
+      urls: "turn:server.company.com:19403",
+      username: "username",
+      credentials: "token"
+    }) */
+    // STUN  server
+    iceConfiguration.iceServers.push({
+      urls: "stun:stun1.l.google.com:19302" 
+    })  
+
+    const localConnection = new RTCPeerConnection(iceConfiguration) 
+
+    localConnection.onicecandidate = (e) => {
+      console.log(`New ICE candidate, reprinting SDP: ${JSON.stringify(localConnection.localDescription)}`)
+    }
+
+    const dataChannel = localConnection.createDataChannel("sendChannel");
+    dataChannel.onmessage = (e) => console.log(`Message recieved: ${e.data}`)
+    dataChannel.onopen = (e) => console.log("dataChannel opened")
+    dataChannel.onclose = (e) => console.log("dataChannel closed")
+    
+    localConnection.createOffer()
+      .then((offer) => localConnection.setLocalDescription(offer))
+    
+    function setRemoteDescription(e) {
+      e.preventDefault()
+
+      localConnection.setRemoteDescription(JSON.parse(e.target.remoteDescriptionInput.value))
+        .then(a=>console.log("Set remote SDP"))
+    }
+
+    document.getElementById("remoteDescriptionForm").addEventListener("submit", setRemoteDescription)
+
+    // Send messages when connected
+    document.getElementById("sendMessageForm").addEventListener("submit", function(e) {
+      e.preventDefault();
+      const message = document.getElementById("messageInput").value;
+
+      if (dataChannel.readyState === "open") {
+        dataChannel.send(message);
+        console.log(`Message sent: ${message}`);
+      } else {
+        console.error("Data channel is not open.");
+      }
+    });
+    
+  </script>
+
+</body>
+</html>
