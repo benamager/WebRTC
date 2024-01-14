@@ -1,5 +1,12 @@
 # WebRTC
-## I am learning WebRTC and this is my playground.
+## I am learning WebRTC, and here is my playground.
 
-Final goal is to have written a custom solution between a browser and a Raspberry PI and transfer it's camera with libcamera stack.
-Reason is UV4L is kinda legacy plus I want to know how it works.
+I am tinkering around with hacking a RC-car to be controlled by a Raspberry PI with a 4G modem and tranfser its video feed to a browser - where we also control it, possible with controller support. This, as you might have guessed, requires very little latency hence WebRTC.
+
+## How does it work?
+
+Normally when we want to connect two clients we would use something like websockets or UDP to relay control signals or video from RPI to browser, but.... latency. Data needs to travel first from client A to the server, get handled and then passed onto client B, but with WebRTC we get a peer to peer connection, perfect!
+
+But it isn't that easy. How would the two clients know who to connect to? Yes, the signaling server. This is a simple Websocket server that passes SDP and ICE candidates to each other and lets them connect.
+
+... to be continued
