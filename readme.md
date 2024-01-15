@@ -9,4 +9,6 @@ Normally when we want to connect two clients we would use something like websock
 
 But it isn't that easy. How would the two clients know who to connect to? Yes, the signaling server. This is a simple Websocket server that passes SDP and ICE candidates to each other and lets them connect.
 
+Trickle ICE, is a way to send ICE candidates as they are discovered, instead of waiting for all of them to be discovered and then send them all at once. This allows us to start the connection faster and send candidates as they are discovered.
+
 ... to be continued

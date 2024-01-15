@@ -1,78 +1,115 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang='en'>
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset='UTF-8'>
+  <meta name='viewport' content='width=device-width, initial-scale=1.0'>
   <title>Peer A</title>
+  <script src='https://cdn.socket.io/4.0.0/socket.io.min.js'></script>
 </head>
 <body>
 
   <h1>Peer A</h1>
-  <p>Copy SDP from console and signal manually to <b>Peer B</b> via input field.</p>
-  <form id="remoteDescriptionForm" type="submit">
-    <input id="remoteDescriptionInput" type="text" placeholder="Remote SDP"/>
-    <button>Create connection</button>
-  </form>
-
-  <br/>
-
+  <div>Signaling server: <span id='status'>Connecting...</span></div>
+  <div>WebRTC connection: <span id='connection'>Waiting...</span></div>
   <p><b>When connected</b>, send messages below</p>
-  <form id="sendMessageForm">
-    <input id="messageInput" type="text" placeholder="Type message here"/>
-    <button type="submit">Send</button>
+  <form id='sendMessageForm'>
+    <input id='messageInput' type='text' placeholder='Type message here'/>
+    <button type='submit'>Send</button>
   </form>
+  <ul id="messages">
+  </ul>
   
 
   <script>
+    function addLine(text) {
+      document.getElementById("messages").insertAdjacentHTML("beforeend", `<li>${text}</li>`)
+    }
+
+    const socket = io('http://localhost:8080');
+
     const iceConfiguration = { }
     iceConfiguration.iceServers = [];
     /* TURN server
     iceConfiguration.iceServers.push({
-      urls: "turn:server.company.com:19403",
-      username: "username",
-      credentials: "token"
+      urls: 'turn:server.company.com:19403',
+      username: 'username',
+      credentials: 'token'
     }) */
     // STUN  server
     iceConfiguration.iceServers.push({
-      urls: "stun:stun1.l.google.com:19302" 
+      urls: 'stun:stun1.l.google.com:19302' 
     })  
 
-    const localConnection = new RTCPeerConnection(iceConfiguration) 
+    let localConnection = new RTCPeerConnection(iceConfiguration) 
+    
+    localConnection.onicecandidate = (event) => {
+      if (event.candidate && event.candidate.candidate !== "") {
+          addLine("New ICE candidate");
+          console.log(JSON.stringify(event.candidate, null, 2))
+          socket.emit("ice_candidate", JSON.stringify(event.candidate));
+      } else {
+          addLine("All current ICE candidates have been gathered.");
+      }
+    };
 
-    localConnection.onicecandidate = (e) => {
-      console.log(`New ICE candidate, reprinting SDP: ${JSON.stringify(localConnection.localDescription)}`)
-    }
-
-    const dataChannel = localConnection.createDataChannel("sendChannel");
-    dataChannel.onmessage = (e) => console.log(`Message recieved: ${e.data}`)
-    dataChannel.onopen = (e) => console.log("dataChannel opened")
-    dataChannel.onclose = (e) => console.log("dataChannel closed")
+    const dataChannel = localConnection.createDataChannel('sendChannel');
+    dataChannel.onmessage = (e) => addLine(`Message recieved: ${e.data}`)
+    dataChannel.onopen = (e) => document.getElementById("connection").textContent = "Established"
+    dataChannel.onclose = (e) => document.getElementById("connection").textContent = "Closed"
     
     localConnection.createOffer()
-      .then((offer) => localConnection.setLocalDescription(offer))
+      .then((offer) => {
+        localConnection.setLocalDescription(offer)
+        // Send offer to peer B
+        socket.emit("offer", JSON.stringify(offer));
+    })
     
-    function setRemoteDescription(e) {
-      e.preventDefault()
-
-      localConnection.setRemoteDescription(JSON.parse(e.target.remoteDescriptionInput.value))
-        .then(a=>console.log("Set remote SDP"))
+    function setRemoteDescription(answer) {
+      localConnection.setRemoteDescription(JSON.parse(answer))
+        .then(a=>addLine('Set remote SDP'))
     }
 
-    document.getElementById("remoteDescriptionForm").addEventListener("submit", setRemoteDescription)
-
     // Send messages when connected
-    document.getElementById("sendMessageForm").addEventListener("submit", function(e) {
+    document.getElementById('sendMessageForm').addEventListener('submit', function(e) {
       e.preventDefault();
-      const message = document.getElementById("messageInput").value;
+      const message = document.getElementById('messageInput').value;
 
-      if (dataChannel.readyState === "open") {
+      if (dataChannel.readyState === 'open') {
         dataChannel.send(message);
-        console.log(`Message sent: ${message}`);
+        addLine(`Message sent: ${message}`);
       } else {
-        console.error("Data channel is not open.");
+        console.error('Data channel is not open.');
       }
     });
-    
+
+    // SIGNALING
+    var statusElement = document.getElementById('status'); // To display connection status
+
+    socket.on('connect', function() {
+        statusElement.textContent = 'Connected';
+        addLine('Connected to the signaling server');
+    });
+
+    socket.on('disconnect', function() {
+      statusElement.innerText = 'Disconnected';
+    });
+
+    socket.on('reconnect_attempt', function() {
+      statusElement.innerText = 'Reconnecting...';
+      addLine('Attempting to reconnect...');
+    });
+
+    // Handling an answer from a peer
+    socket.on('answer', function(answer) {
+        addLine('Received answer');
+        setRemoteDescription(answer)
+    });
+
+    socket.on('ice_candidate', function(candidate) {
+      localConnection.addIceCandidate(JSON.parse(candidate))
+        .then(a => addLine("Added ICE candidate"))
+        .catch(e => console.error(e))
+    });
   </script>
 
 </body>

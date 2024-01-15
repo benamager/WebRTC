@@ -16,15 +16,8 @@
     <input id='messageInput' type='text' placeholder='Type message here'/>
     <button type='submit'>Send</button>
   </form>
-  <ul id="messages">
-  </ul>
   
-
   <script>
-    function addLine(text) {
-      document.getElementById("messages").insertAdjacentHTML("beforeend", `<li>${text}</li>`)
-    }
-
     const socket = io('http://localhost:8080');
 
     const iceConfiguration = { }
@@ -42,30 +35,30 @@
 
     let localConnection = new RTCPeerConnection(iceConfiguration) 
     
-
     localConnection.onicecandidate = (event) => {
-      if (event.candidate === null) {
-        // All ICE candidates have been gathered
-        addLine("All ICE candidates have been gathered.");
-  
-        addLine("Sending offer to Peer B");
-        socket.emit("offer", JSON.stringify(localConnection.localDescription));
+      if (event.candidate !== null) {
+          console.log("New ICE candidate");
+        socket.emit("ice_candidate", JSON.stringify(event.candidate));
       } else {
-          addLine("New ICE candidate");
+          console.log("All ICE candidates have been gathered.");
       }
     };
 
     const dataChannel = localConnection.createDataChannel('sendChannel');
-    dataChannel.onmessage = (e) => addLine(`Message recieved: ${e.data}`)
+    dataChannel.onmessage = (e) => console.info(`Message recieved: ${e.data}`)
     dataChannel.onopen = (e) => document.getElementById("connection").textContent = "Established"
     dataChannel.onclose = (e) => document.getElementById("connection").textContent = "Closed"
     
     localConnection.createOffer()
-      .then((offer) => localConnection.setLocalDescription(offer))
+      .then((offer) => {
+        localConnection.setLocalDescription(offer)
+        // Send offer to peer B
+        socket.emit("offer", JSON.stringify(offer));
+    })
     
     function setRemoteDescription(answer) {
       localConnection.setRemoteDescription(JSON.parse(answer))
-        .then(a=>addLine('Set remote SDP'))
+        .then(a=>console.log('Set remote SDP'))
     }
 
     // Send messages when connected
@@ -75,7 +68,7 @@
 
       if (dataChannel.readyState === 'open') {
         dataChannel.send(message);
-        addLine(`Message sent: ${message}`);
+        console.log(`Message sent: ${message}`);
       } else {
         console.error('Data channel is not open.');
       }
@@ -86,7 +79,7 @@
 
     socket.on('connect', function() {
         statusElement.textContent = 'Connected';
-        addLine('Connected to the signaling server');
+        console.info('Connected to the signaling server');
     });
 
     socket.on('disconnect', function() {
@@ -95,13 +88,19 @@
 
     socket.on('reconnect_attempt', function() {
       statusElement.innerText = 'Reconnecting...';
-      addLine('Attempting to reconnect...');
+      console.log('Attempting to reconnect...');
     });
 
     // Handling an answer from a peer
     socket.on('answer', function(answer) {
-        addLine('Received answer');
+        console.log('Received answer');
         setRemoteDescription(answer)
+    });
+
+    socket.on('ice_candidate', function(candidate) {
+      localConnection.addIceCandidate(JSON.parse(candidate))
+        .then(a => console.log("Added ICE candidate"))
+        .catch(e => console.error(e))
     });
   </script>
 
