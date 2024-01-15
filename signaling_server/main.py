@@ -37,7 +37,7 @@ def handle_answer(data):
     socketio.emit('answer', data,  include_self=False)
 
 @socketio.on('ice_candidate')
-def handle_icecandidate(data):
+def handle_ice_candidate(data):
     print('Relaying ICE candidate')
     socketio.emit('ice_candidate', data, include_self=False)
 
