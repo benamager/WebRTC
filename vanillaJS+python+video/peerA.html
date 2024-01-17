@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang='en'>
+<head>
+  <meta charset='UTF-8'>
+  <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+  <title>Peer A</title>
+  <script src='https://cdn.socket.io/4.0.0/socket.io.min.js'></script>
+</head>
+<body>
+
+  <h1>Peer A</h1>
+  <div>Signaling server: <span id='status'>Connecting...</span></div>
+  <div>WebRTC connection: <span id='connection'>Waiting...</span></div>
+  <p>Video below:</p>
+  <video id="remoteVideo" autoplay controls playsinline muted></video>
+
+  <script>
+    const socket = io('http://localhost:8080');
+
+    const iceConfiguration = { }
+    iceConfiguration.iceServers = [];
+    /* TURN server
+    iceConfiguration.iceServers.push({
+      urls: 'turn:server.company.com:19403',
+      username: 'username',
+      credentials: 'token'
+    }) */
+    // STUN  server
+    iceConfiguration.iceServers.push({
+      urls: 'stun:fr-turn1.xirsys.com' 
+    })  
+
+    let localConnection = new RTCPeerConnection(iceConfiguration) 
+    
+    localConnection.onicecandidate = (event) => {
+      if (event.candidate && event.candidate.candidate !== "") {
+          console.log("New ICE candidate");
+          console.log(JSON.stringify(event.candidate, null, 2))
+          socket.emit("ice_candidate", JSON.stringify(event.candidate));
+      } else {
+          console.log("All current ICE candidates have been gathered.");
+      }
+    };
+
+    // Handle incoming media tracks
+    localConnection.ontrack = (event) => {
+      console.log("Received new track", event.track.kind);
+      document.getElementById("connection").textContent = "Established"
+      document.getElementById('remoteVideo').srcObject = event.streams[0];
+      console.log(event.streams)
+
+      document.getElementById('remoteVideo').srcObject = event.streams[0];
+      console.log(document.getElementById('remoteVideo').srcObject); // Add this line
+      console.log(event.track.readyState); // should be "live"
+    };
+    
+    localConnection.createOffer({ offerToReceiveVideo: true })
+      .then((offer) => {
+        localConnection.setLocalDescription(offer)
+        // Send offer to peer B
+        socket.emit("offer", JSON.stringify(offer));
+    })
+    
+    function setRemoteDescription(answer) {
+      localConnection.setRemoteDescription(JSON.parse(answer))
+        .then(a=>console.log('Set remote SDP'))
+    }
+
+    // SIGNALING
+    var statusElement = document.getElementById('status'); // To display connection status
+
+    socket.on('connect', function() {
+        statusElement.textContent = 'Connected';
+        console.log('Connected to the signaling server');
+    });
+
+    socket.on('disconnect', function() {
+      statusElement.innerText = 'Disconnected';
+    });
+
+    socket.on('reconnect_attempt', function() {
+      statusElement.innerText = 'Reconnecting...';
+      console.log('Attempting to reconnect...');
+    });
+
+    // Handling an answer from a peer
+    socket.on('answer', function(answer) {
+        console.log('Received answer');
+        setRemoteDescription(answer)
+    });
+
+    socket.on('ice_candidate', function(candidate) {
+      localConnection.addIceCandidate(JSON.parse(candidate))
+        .then(a => console.log("Added ICE candidate"))
+        .catch(e => console.error(e))
+    });
+  </script>
+
+</body>
+</html>
