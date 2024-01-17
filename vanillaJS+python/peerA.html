@@ -19,7 +19,7 @@
   
 
   <script>
-  const socket = io('http://localhost:8080');
+    const socket = io('http://localhost:8080');
 
     const iceConfiguration = { }
     iceConfiguration.iceServers = [];
@@ -31,7 +31,7 @@
     }) */
     // STUN  server
     iceConfiguration.iceServers.push({
-      urls: 'stun:stun1.l.google.com:19302' 
+      urls: 'stun:fr-turn1.xirsys.com' 
     })  
 
     let localConnection = new RTCPeerConnection(iceConfiguration) 

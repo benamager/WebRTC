@@ -4,7 +4,7 @@ from aiortc import RTCPeerConnection, RTCSessionDescription, RTCConfiguration, R
 import socketio
 
 def create_peer_connection():
-    return RTCPeerConnection(configuration=RTCConfiguration([RTCIceServer("stun:stun.l.google:19302")]))
+    return RTCPeerConnection(configuration=RTCConfiguration([RTCIceServer("stun:fr-turn1.xirsys.com")]))
 
 async def main():
     peer_connection = create_peer_connection()
@@ -19,7 +19,7 @@ async def main():
     @sio.event
     async def disconnect():
         print("Disconnected from the server")
-        peer_connection.close()
+        await peer_connection.close()
 
     @sio.on('offer')
     async def handle_offer(offer_json):
@@ -50,6 +50,13 @@ async def main():
             def on_close():
                 print("dataChannel closed")
 
+        # Monitor Signaling State Changes
+        @peer_connection.on("signalingstatechange")
+        async def on_signalingstatechange():
+            print(f"Signaling state changed to: {peer_connection.signalingState}")
+            if peer_connection.signalingState == "closed":
+                peer_connection = create_peer_connection()
+
         # Set remote description from Peer A
         await peer_connection.setRemoteDescription(RTCSessionDescription(sdp=offer["sdp"], type=offer["type"]))
 
@@ -58,7 +65,7 @@ async def main():
         await peer_connection.setLocalDescription(local_answer)
 
         await sio.emit('answer', json.dumps({"sdp": peer_connection.localDescription.sdp, "type": peer_connection.localDescription.type}))
-    
+
     # Handle ICE candidate messages
     @sio.on('ice_candidate')
     async def handle_icecandidate(data):
@@ -88,7 +95,7 @@ async def main():
             print(f"Error handling ICE candidate: {e}")
 
     # Connect to the Flask-SocketIO server
-    await sio.connect('http://0.0.0.0:8080')
+    await sio.connect('http://localhost:8080')
 
     # Keep the application running until it's stopped
     await sio.wait()

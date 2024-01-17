@@ -30,15 +30,15 @@
     }) */
     // STUN  server
     iceConfiguration.iceServers.push({
-      urls: 'stun:stun1.l.google.com:19302' 
+      urls: 'stun:fr-turn1.xirsys.com' 
     })  
 
     let localConnection = new RTCPeerConnection(iceConfiguration) 
     
     localConnection.onicecandidate = (event) => {
-      if (event.candidate !== null) {
+      if (event.candidate !== null && event.candidate !== "") {
           console.log("New ICE candidate");
-        socket.emit("ice_candidate", JSON.stringify(event.candidate));
+          socket.emit("ice_candidate", JSON.stringify(event.candidate));
       } else {
           console.log("All ICE candidates have been gathered.");
       }
@@ -54,11 +54,12 @@
         localConnection.setLocalDescription(offer)
         // Send offer to peer B
         socket.emit("offer", JSON.stringify(offer));
-    })
+    }).catch(e => alert(JSON.stringify(e)))
     
     function setRemoteDescription(answer) {
       localConnection.setRemoteDescription(JSON.parse(answer))
         .then(a=>console.log('Set remote SDP'))
+        .catch(e => alert(JSON.stringify(e)))
     }
 
     // Send messages when connected
@@ -100,7 +101,7 @@
     socket.on('ice_candidate', function(candidate) {
       localConnection.addIceCandidate(JSON.parse(candidate))
         .then(a => console.log("Added ICE candidate"))
-        .catch(e => console.error(e))
+        .catch(e => alert(JSON.stringify(e)))
     });
   </script>
 

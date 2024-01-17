@@ -29,7 +29,7 @@
             }) */
             // STUN  server
             iceConfiguration.iceServers.push({
-                urls: "stun:stun1.l.google.com:19302",
+                urls: "stun:fr-turn1.xirsys.com",
             });
 
             let remoteConnection = initializePeerConnection();
@@ -73,7 +73,7 @@
                         console.log("Created answer");
                         socket.emit("answer", JSON.stringify(remoteConnection.localDescription));
                         console.log("Sent answer");
-                    });
+                    }).catch(e => console.error(e));
             }
 
             // Send messages when connected

@@ -7,10 +7,11 @@ My use case only requires two, but this can be extended by using rooms.
 
 from flask import Flask, render_template, render_template_string
 from flask_socketio import SocketIO
+from flask_cors import CORS
 
 PORT = 8080
 app = Flask(__name__)
-socketio = SocketIO(app)
+CORS(app)
 socketio = SocketIO(app, cors_allowed_origins='*')
 
 # Serve index to show server is running
@@ -43,4 +44,4 @@ def handle_ice_candidate(data):
 
 if __name__ == '__main__':
     print(f'Running on http://0.0.0.0:{PORT}')
-    socketio.run(app, port=PORT)
+    socketio.run(app, host='0.0.0.0', port=PORT)
