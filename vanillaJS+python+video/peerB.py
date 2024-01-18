@@ -1,5 +1,5 @@
 '''
-Stream video from a Raspberry Pi using aiortc and latest libcamera stack to a web browser using WebRTC.
+Stream video from a Raspberry Pi using aiortc and latest libcamera stack to a web browser via WebRTC.
 This is fantastic and has very low latency.
 
 Tested on a Raspberry Pi 4 with Camera Module v3 running Raspberry Pi OS Lite (Bookworm, 64-bit)
@@ -8,16 +8,18 @@ import json
 import asyncio
 from aiortc import RTCPeerConnection, RTCSessionDescription, RTCConfiguration, RTCIceServer, RTCIceCandidate, VideoStreamTrack
 from picamera2 import Picamera2
-from picamera2.encoders import H264Encoder, JpegEncoder
-from picamera2.outputs import FileOutput
 import socketio
-import numpy as np
 from av import VideoFrame
-from aiortc.rtcrtpparameters import RTCRtpCodecCapability
 import cv2
 
+# Constants
+CAMERA_SIZE = (640, 480)
+SIGNALING_SERVER_URL = 'http://192.168.1.139:8080'
+SIGNALING_SERVER_TOKEN = "secureTokenGoesHere"
+
+# Camera instance
 picam2 = Picamera2()
-picam2.configure(picam2.create_video_configuration(main={"size": (640, 480)}))
+picam2.configure(picam2.create_video_configuration(main={"size": CAMERA_SIZE}))
 picam2.start()
 
 class Picamera2Track(VideoStreamTrack):
@@ -100,15 +102,20 @@ async def main():
                 print("dataChannel closed")
 
         # Set remote description from Peer A
-        await peer_connection.setRemoteDescription(RTCSessionDescription(sdp=offer["sdp"], type=offer["type"]))
+        try:
+            await peer_connection.setRemoteDescription(RTCSessionDescription(sdp=offer["sdp"], type=offer["type"]))
+        except Exception as e:
+            print(f"Error setting remote description: {e}")
 
         video_track = Picamera2Track(picam2)
         peer_connection.addTrack(video_track)
 
-
         # Create and set local answer
-        local_answer = await peer_connection.createAnswer()
-        await peer_connection.setLocalDescription(local_answer)
+        try:
+            local_answer = await peer_connection.createAnswer()
+            await peer_connection.setLocalDescription(local_answer)
+        except Exception as e:
+            print(f"Error creating or setting local answer: {e}")
 
         await sio.emit('answer', json.dumps({"sdp": peer_connection.localDescription.sdp, "type": peer_connection.localDescription.type}))
 
@@ -140,10 +147,15 @@ async def main():
         except Exception as e:
             print(f"Error handling ICE candidate: {e}")
 
-    # Connect to the Flask-SocketIO server
-    await sio.connect('http://localhost:8080')
+    # Connect to signaling server
+    try:
+        await sio.connect(SIGNALING_SERVER_URL, 
+                    query={"token": SIGNALING_SERVER_TOKEN})
+    except Exception as e:
+        print(f"Error connecting to signaling server: {e}")
+        return
 
-    # Keep the application running until it's stopped
+    # Keep application running
     await sio.wait()
 
 if __name__ == '__main__':

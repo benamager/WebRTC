@@ -5,11 +5,13 @@ Acting as a relay for SDP and ICE candidates between two clients.
 My use case only requires two, but this can be extended by using rooms.
 '''
 
-from flask import Flask, render_template, render_template_string
+from flask import Flask, request, render_template, render_template_string
 from flask_socketio import SocketIO
 from flask_cors import CORS
 
 PORT = 8080
+HARDCODED_TOKEN = "secureTokenGoesHere" # Not optimal, but good enough for my use case
+
 app = Flask(__name__)
 CORS(app)
 socketio = SocketIO(app, cors_allowed_origins='*')
@@ -21,7 +23,13 @@ def index():
 
 @socketio.on('connect')
 def handle_connect():
-    print('Client connected')
+    # Authenticate client
+    print("TOKEN FROM CLIENT:", request.args.get('token'))
+    token = request.args.get('token')
+    if token != HARDCODED_TOKEN:
+        print('Authentication failed: Invalid token')
+        return False # Reject client connection
+    print('Client connected with valid token')
 
 @socketio.on('disconnect')
 def handle_disconnect():

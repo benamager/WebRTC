@@ -15,8 +15,15 @@
   <video id="remoteVideo" autoplay controls playsinline muted></video>
 
   <script>
-    const socket = io('http://localhost:8080');
+    const SIGNALING_SERVER_URL = "http://192.168.1.139:8080"
+    const SIGNALING_SERVER_TOKEN = "secureTokenGoesHere"
 
+    const socket = io(SIGNALING_SERVER_URL, {
+      query: {
+        token: SIGNALING_SERVER_TOKEN
+      }
+    });
+    
     const iceConfiguration = { }
     iceConfiguration.iceServers = [];
     /* TURN server
@@ -95,6 +102,5 @@
         .catch(e => console.error(e))
     });
   </script>
-
 </body>
 </html>
