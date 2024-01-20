@@ -17,6 +17,10 @@ CAMERA_SIZE = (640, 480)
 SIGNALING_SERVER_URL = 'http://192.168.1.139:8080'
 SIGNALING_SERVER_TOKEN = "secureTokenGoesHere"
 
+sio = None
+peer_connection = None
+picam2 = None
+
 class Picamera2Track(VideoStreamTrack):
     def __init__(self, camera):
         super().__init__()
@@ -49,13 +53,19 @@ class Picamera2Track(VideoStreamTrack):
     def kind(self):
         return "video"
 
-def create_peer_connection():
-    return RTCPeerConnection(configuration=RTCConfiguration([RTCIceServer("stun:fr-turn1.xirsys.com")]))
+async def create_peer_connection():
+    global peer_connection
+    if peer_connection is not None:
+        await peer_connection.close()
+    peer_connection = RTCPeerConnection(configuration=RTCConfiguration([RTCIceServer("stun:fr-turn1.xirsys.com")]))
+
+    video_track = Picamera2Track(picam2)
+    peer_connection.addTrack(video_track)
 
 async def main():
-    sio = None
-    peer_connection = None
-    picam2 = None
+    global peer_connection
+    global picam2
+    global sio
 
     try:
         # Camera instance
@@ -65,7 +75,6 @@ async def main():
 
         # Wait for camera to warm up
         await asyncio.sleep(2)
-        peer_connection = create_peer_connection()
 
         # Socket.IO client
         sio = socketio.AsyncClient()
@@ -81,51 +90,54 @@ async def main():
 
         @sio.on('offer')
         async def handle_offer(offer_json):
-            print('Received offer from Peer A')
-            offer = json.loads(offer_json)
-
-            # Send candidate to Peer A over signaling channel
-            @peer_connection.on("ice_candidate")
-            async def on_icecandidate(candidate):
-                await sio.emit('ice_candidate', json.dumps({
-                    "candidate": candidate.candidate,
-                    "sdpMid": candidate.sdpMid,
-                    "sdpMLineIndex": candidate.sdpMLineIndex
-                }))
-
-            # Handle Data Channel
-            @peer_connection.on("datachannel")
-            def on_data_channel(channel):
-                @channel.on("message")
-                def on_message(message):
-                    print("Received message:", message)
-
-                @channel.on("open")
-                def on_open():
-                    print("dataChannel opened")
-
-                @channel.on("close")
-                def on_close():
-                    print("dataChannel closed")
-
-            # Set remote description from Peer A
             try:
-                await peer_connection.setRemoteDescription(RTCSessionDescription(sdp=offer["sdp"], type=offer["type"]))
+                print('Received offer from Peer A')
+
+                await create_peer_connection()
+                
+                offer = json.loads(offer_json)
+
+                # Send candidate to Peer A over signaling channel
+                @peer_connection.on("ice_candidate")
+                async def on_icecandidate(candidate):
+                    await sio.emit('ice_candidate', json.dumps({
+                        "candidate": candidate.candidate,
+                        "sdpMid": candidate.sdpMid,
+                        "sdpMLineIndex": candidate.sdpMLineIndex
+                    }))
+
+                # Handle Data Channel
+                @peer_connection.on("datachannel")
+                def on_data_channel(channel):
+                    @channel.on("message")
+                    def on_message(message):
+                        print("Received message:", message)
+
+                    @channel.on("open")
+                    def on_open():
+                        print("dataChannel opened")
+
+                    @channel.on("close")
+                    def on_close():
+                        print("dataChannel closed")
+
+                # Set remote description from Peer A
+                try:
+                    await peer_connection.setRemoteDescription(RTCSessionDescription(sdp=offer["sdp"], type=offer["type"]))
+                except Exception as e:
+                    print(f"Error setting remote description: {e}")
+
+                # Create and set local answer
+                try:
+                    local_answer = await peer_connection.createAnswer()
+                    await peer_connection.setLocalDescription(local_answer)
+                except Exception as e:
+                    print(f"Error creating or setting local answer: {e}")
+
+                await sio.emit('answer', json.dumps({"sdp": peer_connection.localDescription.sdp, "type": peer_connection.localDescription.type}))
             except Exception as e:
-                print(f"Error setting remote description: {e}")
-
-            video_track = Picamera2Track(picam2)
-            peer_connection.addTrack(video_track)
-
-            # Create and set local answer
-            try:
-                local_answer = await peer_connection.createAnswer()
-                await peer_connection.setLocalDescription(local_answer)
-            except Exception as e:
-                print(f"Error creating or setting local answer: {e}")
-
-            await sio.emit('answer', json.dumps({"sdp": peer_connection.localDescription.sdp, "type": peer_connection.localDescription.type}))
-
+                print(f"Error handling offer: {e}")
+            
         # Handle ICE candidate messages
         @sio.on('ice_candidate')
         async def handle_icecandidate(data):
