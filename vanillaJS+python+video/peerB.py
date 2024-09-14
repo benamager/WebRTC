@@ -10,7 +10,6 @@ from aiortc import RTCPeerConnection, RTCSessionDescription, RTCConfiguration, R
 from picamera2 import Picamera2
 import socketio
 from av import VideoFrame
-import cv2
 
 # Constants
 CAMERA_SIZE = (640, 480)
@@ -33,11 +32,8 @@ class Picamera2Track(VideoStreamTrack):
                 # Capture a frame from the camera
                 frame = self.camera.capture_array()
 
-                # Convert RGBA to BGR
-                frame = cv2.cvtColor(frame, cv2.COLOR_RGBA2BGR)
-
                 # Convert the frame to the correct format
-                av_frame = VideoFrame.from_ndarray(frame, format="bgr24")
+                av_frame = VideoFrame.from_ndarray(frame, format="yuv420p")
 
                 # Manage timestamps
                 av_frame.pts, av_frame.time_base = await self.next_timestamp()
@@ -70,7 +66,7 @@ async def main():
     try:
         # Camera instance
         picam2 = Picamera2()
-        picam2.configure(picam2.create_video_configuration(main={"size": CAMERA_SIZE}))
+        picam2.configure(picam2.create_video_configuration(main={"size": CAMERA_SIZE, "format": "YUV420"}))
         picam2.start()
 
         # Wait for camera to warm up
