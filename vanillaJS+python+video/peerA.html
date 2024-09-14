@@ -61,7 +61,10 @@
       console.log(event.track.readyState); // should be "live"
     };
     
-    localConnection.createOffer({ offerToReceiveVideo: true })
+    localConnection.addTransceiver('video', { direction: 'recvonly' });
+    // Use the above instead of localConnection.createOffer({ offerToReceiveVideo: true }) as that doesn't work in Safari
+
+    localConnection.createOffer()
       .then((offer) => {
         localConnection.setLocalDescription(offer)
         // Send offer to peer B
